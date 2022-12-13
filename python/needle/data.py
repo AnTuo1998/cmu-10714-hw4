@@ -1,9 +1,82 @@
-import numpy as np
-from .autograd import Tensor
+import gzip
 import os
 import pickle
-from typing import Iterator, Optional, List, Sized, Union, Iterable, Any
+import struct
+from typing import Any, Iterable, Iterator, List, Optional, Sized, Union
+
+import numpy as np
 from needle import backend_ndarray as nd
+
+from .autograd import Tensor
+
+
+def unpack_part(fmt, data):
+    size = struct.calcsize(fmt)
+    return struct.unpack(fmt, data[:size]), data[size:]
+
+
+def read_idx_file(file_name, TYPE="image") -> np.array:
+    '''
+    TYPE = image / label
+    '''
+    if TYPE not in ["image",  "label"]:
+        raise Exception("wrong file type")
+    with gzip.open(file_name, "rb") as f:
+        data = f.read()
+        f.close()
+    (zero0, zero1, type_id, dims), data = unpack_part(">bbbb", data)
+    if zero0 != 0 or zero1 != 0:
+        raise Exception("Invalid file format")
+
+    types = {
+        int('0x08', base=16): 'B',
+        int('0x09', base=16): 'b',
+        int('0x0B', base=16): 'h',
+        int('0x0C', base=16): 'i',
+        int('0x0D', base=16): 'f',
+        int('0x0E', base=16): 'd'
+    }
+    type_code = types[type_id]
+
+    dim_sizes, data = unpack_part(">" + "I" * dims, data)
+    num_examples = dim_sizes[0]
+    input_dim = int(np.prod(dim_sizes[1:]))
+
+    X, data = unpack_part('>' + (type_code * (num_examples * input_dim)), data)
+
+    if data:
+        raise Exception("invalid file format")
+
+    new_shape = (num_examples, input_dim) if input_dim > 1 else num_examples
+    return np.array(X).reshape(new_shape, order='C')
+
+
+def parse_mnist(image_filename, label_filename):
+    """ Read an images and labels file in MNIST format.  See this page:
+    http://yann.lecun.com/exdb/mnist/ for a description of the file format.
+    Args:
+        image_filename (str): name of gzipped images file in MNIST format
+        label_filename (str): name of gzipped labels file in MNIST format
+    Returns:
+        Tuple (X,y):
+            X (numpy.ndarray[np.float32]): 2D numpy array containing the loaded
+                data.  The dimensionality of the data should be
+                (num_examples x input_dim) where 'input_dim' is the full
+                dimension of the data, e.g., since MNIST images are 28x28, it
+                will be 784.  Values should be of type np.float32, and the data
+                should be normalized to have a minimum value of 0.0 and a
+                maximum value of 1.0. The normalization should be applied uniformly
+                across the whole dataset, _not_ individual images.
+            y (numpy.ndarray[dtype=np.uint8]): 1D numpy array containing the
+                labels of the examples.  Values should be of type np.uint8 and
+                for MNIST will contain the values 0-9.
+    """
+    ### BEGIN YOUR CODE
+    images = read_idx_file(image_filename).astype('float32')
+    images = (images - images.min()) / (images.max() - images.min())
+    labels = read_idx_file(label_filename).astype('uint8')
+    return images, labels
+    ### END YOUR CODE
 
 
 class Transform:
@@ -26,7 +99,10 @@ class RandomFlipHorizontal(Transform):
         """
         flip_img = np.random.rand() < self.p
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if flip_img:
+            return img[:, ::-1, :]
+        else:
+            return img
         ### END YOUR SOLUTION
 
 
@@ -46,7 +122,11 @@ class RandomCrop(Transform):
             low=-self.padding, high=self.padding + 1, size=2
         )
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        H, W, C = img.shape
+        start_x, start_y = shift_x + self.padding, shift_y + self.padding
+        pad_width = ((self.padding, self.padding),
+                     (self.padding, self.padding), (0, 0))
+        return np.pad(img, pad_width, mode='constant')[start_x:start_x+H, start_y:start_y+W]
         ### END YOUR SOLUTION
 
 
@@ -101,19 +181,35 @@ class DataLoader:
         self.batch_size = batch_size
         if not self.shuffle:
             self.ordering = np.array_split(
-                np.arange(len(dataset)), range(batch_size, len(dataset), batch_size)
+                np.arange(len(dataset)), range(
+                    batch_size, len(dataset), batch_size)
             )
 
     def __iter__(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if self.shuffle:
+            ordering = np.arange(len(self.dataset))
+            np.random.shuffle(ordering)
+            batch_range = range(self.batch_size, len(
+                self.dataset), self.batch_size)
+            self.ordering = np.array_split(ordering, batch_range)
+        self.batch_idx = 0
         ### END YOUR SOLUTION
         return self
 
     def __next__(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if self.batch_idx < len(self.ordering):
+            idx = self.ordering[self.batch_idx]
+            self.batch_idx += 1
+            batch_data = tuple([Tensor(x) for x in self.dataset[idx]])
+            return batch_data
+        else:
+            raise StopIteration
         ### END YOUR SOLUTION
+
+    def __len__(self):
+        return len(self.ordering)
 
 
 class MNISTDataset(Dataset):
@@ -124,21 +220,36 @@ class MNISTDataset(Dataset):
         transforms: Optional[List] = None,
     ):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.transforms = transforms
+        self.images, self.labels = parse_mnist(image_filename, label_filename)
+        self.image_shape = (-1, 28, 28, 1)
         ### END YOUR SOLUTION
 
     def __getitem__(self, index) -> object:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        img = self.images[index].reshape(self.image_shape)
+        label = self.labels[index]
+        # if self.transforms:
+        #     for t in self.transforms:
+        #         img = t(img)
+        img = self.apply_transforms(img)
+        return img, label
         ### END YOUR SOLUTION
 
     def __len__(self) -> int:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return len(self.images)
         ### END YOUR SOLUTION
 
 
 class CIFAR10Dataset(Dataset):
+    
+    base_folder = "cifar-10-batches-py"
+    url = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
+    filename = "cifar-10-python.tar.gz"
+    train_list = ["data_batch_1", "data_batch_2", "data_batch_3", "data_batch_4", "data_batch_5"]
+    test_list = ["test_batch"]
+
     def __init__(
         self,
         base_folder: str,
@@ -156,7 +267,24 @@ class CIFAR10Dataset(Dataset):
         y - numpy array of labels
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        super().__init__(transforms=transforms)
+        if train:
+            downloaded_list = self.train_list
+        else:
+            downloaded_list = self.test_list
+        
+        self.data = []
+        self.targets = []
+        
+        for file_name in downloaded_list:
+            file_path = os.path.join(base_folder, file_name)
+            with open(file_path, "rb") as f:
+                entry = pickle.load(f, encoding="latin1")
+                self.data.append(entry["data"])
+                self.targets.extend(entry["labels"])
+        
+        self.data = np.vstack(self.data).reshape(-1, 3, 32, 32)
+        self.targets = np.array(self.targets)
         ### END YOUR SOLUTION
 
     def __getitem__(self, index) -> object:
@@ -165,7 +293,8 @@ class CIFAR10Dataset(Dataset):
         Image should be of shape (3, 32, 32)
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        img = self.apply_transforms(self.data[index])
+        return img, self.targets[index]
         ### END YOUR SOLUTION
 
     def __len__(self) -> int:
@@ -173,7 +302,7 @@ class CIFAR10Dataset(Dataset):
         Returns the total number of examples in the dataset
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return len(self.targets)
         ### END YOUR SOLUTION
 
 

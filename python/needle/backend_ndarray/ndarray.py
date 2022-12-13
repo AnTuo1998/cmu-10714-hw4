@@ -246,7 +246,10 @@ class NDArray:
         """
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if prod(new_shape) != prod(self.shape):
+            raise ValueError(
+                f"cannot reshape array of size {prod(self.shape)} into shape {new_shape}")
+        return NDArray.make(new_shape, device=self.device, handle=self._handle, offset=self._offset)
         ### END YOUR SOLUTION
 
     def permute(self, new_axes):
@@ -271,7 +274,16 @@ class NDArray:
         """
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        shape = self.shape
+        strides = self.strides
+        new_shape = [0] * len(shape)
+        new_strides = [0] * len(strides)
+        for i, na in enumerate(new_axes):
+            new_shape[i] = shape[na]
+            new_strides[i] = strides[na]
+        new_shape = tuple(new_shape)
+        new_strides = tuple(new_strides)
+        return NDArray.make(new_shape, strides=new_strides, device=self.device, handle=self._handle, offset=self._offset)
         ### END YOUR SOLUTION
 
     def broadcast_to(self, new_shape):
@@ -294,7 +306,58 @@ class NDArray:
             point to the same memory as the original array.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        assert all([new_shape[i] == s for i,
+                    s in enumerate(self.shape) if s != 1])
+        new_strides = tuple(
+            [
+                0 if ns != s else stride
+                for ns, s, stride in zip(new_shape, self.shape, self.strides)
+            ]
+        )
+        return NDArray.make(new_shape, strides=new_strides, device=self.device, handle=self._handle, offset=self._offset)
+        ### END YOUR SOLUTION
+    
+    def squeeze(self, axes: int = None):
+        """
+        Returns a tensor with all the dimensions of input of size 1 removed.
+
+        Args:
+            axes (int): the dimension tp squeeze
+
+        Returns:
+            NDArray: the new NDArray object; should
+            point to the same memory as the original array.
+        """
+        ### BEGIN YOUR SOLUTION
+        if axes is None:
+            new_shape = tuple([
+                s for s in self.shape if s != 1
+            ])
+            new_strides = tuple([
+                    stride for s, stride in zip(self.shape, self.strides) if s != 1
+            ])
+        elif isinstance(axes, list) or isinstance(axes, tuple): 
+            axes = list(axes)
+            new_shape = tuple([
+                s for i, s in enumerate(self.shape) if i in axes and s != 1
+            ])
+            new_strides = tuple([
+                stride for i, (s, stride) in enumerate(zip(self.shape, self.strides)) 
+                if i in axes and s != 1
+            ])
+        else:
+            if self.shape[axes] != 1:
+                return self
+            new_shape = tuple([
+                s for i, s in enumerate(self.shape) if i != axes
+            ])
+            new_strides = tuple([
+                    stride for i, stride in enumerate(self.strides) if i != axes
+            ])
+        if not new_shape:
+            new_shape = (1,)
+            new_strides = (1,)
+        return NDArray.make(new_shape, strides=new_strides, device=self.device, handle=self._handle, offset=self._offset)
         ### END YOUR SOLUTION
 
     ### Get and set elements
@@ -361,7 +424,23 @@ class NDArray:
         assert len(idxs) == self.ndim, "Need indexes equal to number of dimensions"
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        new_shape = tuple(
+            [
+                int(math.ceil((s.stop - s.start) / s.step))
+                for i, s in enumerate(idxs)
+            ]
+        )
+        offset = self._offset + np.sum([
+            stride * s.start
+            for stride, s in zip(self.strides, idxs)
+        ])
+        new_strides = tuple(
+            [
+                stride * s.step
+                for stride, s in zip(self.strides, idxs)
+            ]
+        )
+        return NDArray.make(new_shape, strides=new_strides, device=self.device, handle=self._handle, offset=offset)
         ### END YOUR SOLUTION
 
     def __setitem__(self, idxs, other):
@@ -572,7 +651,7 @@ class NDArray:
         Note: compact() before returning.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        
         ### END YOUR SOLUTION
 
 
@@ -634,3 +713,18 @@ def flip(a, axes):
 
 def summation(a, axis=None, keepdims=False):
     return a.sum(axis=axis, keepdims=keepdims)
+
+def matmul(a, b):
+    return a @ b
+
+def max(a, axis=None, keepdims=False):
+    view, out = a.reduce_view_out(axis, keepdims=keepdims)
+    a.device.reduce_max(view.compact()._handle, out._handle, view.shape[-1])
+    return out
+
+
+def squeeze(a, axes=None):
+    return a.squeeze(axes)
+
+def permute(a, new_axes):
+    return a.permute(new_axes)
