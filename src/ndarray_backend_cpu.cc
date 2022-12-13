@@ -43,9 +43,9 @@ void Fill(AlignedArray* out, scalar_t val) {
   }
 }
 
-size_t computeIncIdx(std::vector<uint32_t> &idx,
-                     std::vector<uint32_t> &shape,
-                     std::vector<uint32_t> &strides)
+size_t computeIncIdx(std::vector<int32_t> &idx,
+                     std::vector<int32_t> &shape,
+                     std::vector<int32_t> &strides)
 {
   /**
    * idx : a vector of indices
@@ -106,7 +106,7 @@ void Compact(const AlignedArray& a, AlignedArray* out, std::vector<int32_t> shap
   /// BEGIN YOUR SOLUTION
   size_t cnt = 0;
   scalar_t *p = a.ptr + offset;
-  std::vector<uint32_t> idx(shape.size(), 0);
+  std::vector<int32_t> idx(shape.size(), 0);
   while (idx[0] < shape[0])
   {
     size_t pos = computeIncIdx(idx, shape, strides);
@@ -130,7 +130,7 @@ void EwiseSetitem(const AlignedArray& a, AlignedArray* out, std::vector<int32_t>
   /// BEGIN YOUR SOLUTION
   size_t cnt = 0;
   scalar_t *p = out->ptr + offset;
-  std::vector<uint32_t> idx(shape.size(), 0);
+  std::vector<int32_t> idx(shape.size(), 0);
   while (idx[0] < shape[0])
   {
     size_t pos = computeIncIdx(idx, shape, strides);
@@ -157,7 +157,7 @@ void ScalarSetitem(const size_t size, scalar_t val, AlignedArray* out, std::vect
 
   /// BEGIN YOUR SOLUTION
   scalar_t *p = out->ptr + offset;
-  std::vector<uint32_t> idx(shape.size(), 0);
+  std::vector<int32_t> idx(shape.size(), 0);
   while (idx[0] < shape[0])
   {
     size_t pos = computeIncIdx(idx, shape, strides);
