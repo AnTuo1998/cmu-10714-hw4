@@ -654,7 +654,6 @@ class NDArray:
         
         ### END YOUR SOLUTION
 
-
     def pad(self, axes):
         """
         Pad this ndarray by zeros by the specified amount in `axes`,
@@ -662,7 +661,18 @@ class NDArray:
         axes = ( (0, 0), (1, 1), (0, 0)) pads the middle axis with a 0 on the left and right side.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        shape = self.shape
+        new_shape = tuple(
+            left + size + right
+            for size, (left, right) in zip(shape, axes)
+        )
+        padded = full(new_shape, 0, dtype=self.dtype, device=self.device)
+        original_area_slice = tuple(
+            slice(left, left + size)
+            for size, (left, right) in zip(shape, axes)
+        )
+        padded[original_area_slice] = self
+        return padded
         ### END YOUR SOLUTION
 
 

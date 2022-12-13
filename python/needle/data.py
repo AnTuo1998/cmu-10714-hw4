@@ -283,7 +283,7 @@ class CIFAR10Dataset(Dataset):
                 self.data.append(entry["data"])
                 self.targets.extend(entry["labels"])
         
-        self.data = np.vstack(self.data).reshape(-1, 3, 32, 32)
+        self.data = np.vstack(self.data).reshape(-1, 3, 32, 32) / 255.
         self.targets = np.array(self.targets)
         ### END YOUR SOLUTION
 
