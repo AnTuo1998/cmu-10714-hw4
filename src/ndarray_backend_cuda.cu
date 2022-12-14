@@ -530,13 +530,13 @@ void EwiseTanh(const CudaArray &a, CudaArray *out)
 #define TILE_M 64
 #define TILE_N 64
 #define TILE_P 64
-#define TILE_CY (TILE_M / MATMUL_BLOCKDIM)
-#define TILE_CX (TILE_P / MATMUL_BLOCKDIM)
+#define TILE_CY (TILE_M / 16)
+#define TILE_CX (TILE_P / 16)
 
 __global__ void MatmulKernel(const scalar_t *A, const scalar_t *B, scalar_t *out,
                              uint32_t M, uint32_t N, uint32_t P)
 {
-  __shared__ float sA[TILE_M][TILE_N], sB[TILE_N][TILE_P];
+  __shared__ float sA[TILE_M][TILE_N] = {0}, sB[TILE_N][TILE_P] = {0};
   float c[TILE_CY][TILE_CX] = {0};
   float a[TILE_CY], b[TILE_CX];
   int yblock = blockIdx.y;
@@ -644,11 +644,9 @@ void Matmul(const CudaArray& a, const CudaArray& b, CudaArray* out, uint32_t M, 
   /// BEGIN YOUR SOLUTION
   CudaDims dim;
   dim.block = dim3(MATMUL_BLOCKDIM, MATMUL_BLOCKDIM, 1);
-  dim.grid = dim3(M / MATMUL_BLOCKDIM, P / MATMUL_BLOCKDIM, 1);
-  if (M % TILE_M != 0)
-    dim.grid.x++;
-  if (P % TILE_P != 0)
-    dim.grid.y++;
+  dim.grid = dim3((M + TILE_M - 1) / TILE_M,
+                  (P + TILE_P - 1) / TILE_P,
+                  1);
   MatmulKernel<<<dim.grid, dim.block>>>(a.ptr, b.ptr, out->ptr, M, N, P);
   /// END YOUR SOLUTION
 }
