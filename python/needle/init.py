@@ -92,14 +92,16 @@ def _calculate_fan_in_and_fan_out(shape):
 def xavier_uniform(fan_in, fan_out, shape=None, gain=1.0, **kwargs):
     ### BEGIN YOUR SOLUTION
     a = gain * math.sqrt(6.0 / float(fan_in + fan_out))
-    return rand(fan_in, fan_out, low=-a, high=a, **kwargs)
+    shape = shape or (fan_in, fan_out)
+    return rand(*shape, low=-a, high=a, **kwargs)
     ### END YOUR SOLUTION
 
 
 def xavier_normal(fan_in, fan_out, shape=None, gain=1.0, **kwargs):
     ### BEGIN YOUR SOLUTION
     std = gain * math.sqrt(2.0 / float(fan_in + fan_out))
-    return randn(fan_in, fan_out, mean=0., std=std, **kwargs)
+    shape = shape or (fan_in, fan_out)
+    return randn(*shape, mean=0., std=std, **kwargs)
     ### END YOUR SOLUTION
 
 
