@@ -181,7 +181,6 @@ class DivScalar(TensorOp):
         ### END YOUR SOLUTION
 
 
-
 def divide_scalar(a, scalar):
     return DivScalar(scalar)(a)
 
@@ -224,6 +223,7 @@ class Reshape(TensorOp):
         ### BEGIN YOUR SOLUTION
         return reshape(out_grad, node.inputs[0].shape)
         ### END YOUR SOLUTION
+
 
 def reshape(a, shape):
     return Reshape(shape)(a)
@@ -459,7 +459,7 @@ class Stack(TensorOp):
             idx = [slice(None, None, None)] * len(new_shape)
             idx[self.axis] = i
             out[tuple(idx)] = arg.compact()
-            
+
         return out.compact()
         ### END YOUR SOLUTION
 
@@ -524,9 +524,8 @@ class Flip(TensorOp):
         ### END YOUR SOLUTION
 
 
-def flip(a, axes):
+def flip(a, axes=None):
     return Flip(axes)(a)
-
 
 
 class Dilate(TensorOp):
@@ -544,14 +543,14 @@ class Dilate(TensorOp):
             axes = (self.axes,)
         else:
             axes = self.axes
-    
+
         idx = [slice(None, None, None)] * len(new_shape)
         for axis in axes:
             if axis >= len(new_shape):
                 return a
             new_shape[axis] = shape[axis] * (self.dilation + 1)
             idx[axis] = slice(0, new_shape[axis], self.dilation + 1)
-        
+
         out = array_api.full(
             new_shape, 0, dtype=a.dtype, device=a.device)
         out[tuple(idx)] = a
@@ -566,6 +565,7 @@ class Dilate(TensorOp):
 
 def dilate(a, axes, dilation):
     return Dilate(axes, dilation)(a)
+
 
 class UnDilate(TensorOp):
     def __init__(self, axes: tuple, dilation: int):
@@ -588,7 +588,7 @@ class UnDilate(TensorOp):
             if axis >= len(new_shape):
                 return a
             idx[axis] = slice(0, shape[axis], self.dilation + 1)
-        
+
         return a[tuple(idx)]
         ### END YOUR SOLUTION
 
@@ -612,14 +612,21 @@ class Conv(TensorOp):
         pad_axes = ((0, 0),
                     (self.padding, self.padding),
                     (self.padding, self.padding), (0, 0))
-        A = A.pad(pad_axes)
+        
+        # need compact to make gradient work
+        A = A.compact().pad(pad_axes)
+        B = B.compact()
         N, H, W, C_in = A.shape
         K, _, _, C_out = B.shape
         Ns, Hs, Ws, Cs = A.strides
+        H_out, W_out = (H - K) // self.stride + 1, (W - K) // self.stride + 1
 
-        new_shape = (N, H - K + 1, W - K + 1, K, K, C_in)
-        new_strides = (Ns, Hs, Ws, Hs, Ws, Cs)
-        out_shape = (N, H - K + 1, W - K + 1, C_out)
+        # new_shape = (N, H - K + 1, W - K + 1, K, K, C_in)
+        # new_strides = (Ns, Hs, Ws, Hs, Ws, Cs)
+        # out_shape = (N, H - K + 1, W - K + 1, C_out)
+        new_shape = (N, H_out, W_out, K, K, C_in)
+        new_strides = (Ns, (Hs * self.stride), (Ws * self.stride), Hs, Ws, Cs)
+        out_shape = (N, H_out, W_out, C_out)
 
         outer_dim = new_shape[0] * new_shape[1] * new_shape[2]
         inner_dim = K * K * C_in
@@ -633,13 +640,27 @@ class Conv(TensorOp):
         A = A.as_strided(new_shape, new_strides).compact()
         A = A.reshape((outer_dim, inner_dim))
         out = A @ (B.reshape((K*K*C_in, C_out)))
-        print(A.shape, (K*K*C_in, C_out))
-        return out.reshape(out_shape)[:, ::self.stride, ::self.stride, :]
+        return out.reshape(out_shape)
+        # return out.reshape(out_shape)[:, ::self.stride, ::self.stride, :]
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        A, B = node.inputs
+        K = B.shape[0]
+
+        out_grad = dilate(out_grad, axes=(1, 2), dilation=self.stride-1)
+
+        A_grad = conv(out_grad,
+                      transpose(flip(B, axes=(0, 1)), (2, 3)),
+                      padding=K-self.padding-1)
+
+        B_grad = conv(transpose(A, axes=(3, 0)),
+                      transpose(transpose(out_grad, (0, 1)), (1, 2)),
+                      padding=self.padding)
+        B_grad = transpose(transpose(B_grad, (0, 1)), (1, 2))
+
+        return A_grad, B_grad
         ### END YOUR SOLUTION
 
 
