@@ -651,7 +651,19 @@ class NDArray:
         Note: compact() before returning.
         """
         ### BEGIN YOUR SOLUTION
-        
+        if axes is None:
+            axes = range(len(self.shape))
+        elif isinstance(axes, int):
+            axes = (axes,)
+        new_strides = list(self.strides)
+        new_offset = 0
+        for axis in axes:
+            new_offset += (self.shape[axis] - 1) * new_strides[axis]
+            new_strides[axis] = -new_strides[axis]
+        new_strides = tuple(new_strides)
+
+        return NDArray.make(self.shape, strides=new_strides, device=self.device, 
+                            handle=self._handle, offset=new_offset).compact()
         ### END YOUR SOLUTION
 
     def pad(self, axes):

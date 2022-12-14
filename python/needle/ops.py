@@ -181,7 +181,6 @@ class DivScalar(TensorOp):
         ### END YOUR SOLUTION
 
 
-
 def divide_scalar(a, scalar):
     return DivScalar(scalar)(a)
 
@@ -224,6 +223,7 @@ class Reshape(TensorOp):
         ### BEGIN YOUR SOLUTION
         return reshape(out_grad, node.inputs[0].shape)
         ### END YOUR SOLUTION
+
 
 def reshape(a, shape):
     return Reshape(shape)(a)
@@ -459,7 +459,7 @@ class Stack(TensorOp):
             idx = [slice(None, None, None)] * len(new_shape)
             idx[self.axis] = i
             out[tuple(idx)] = arg.compact()
-            
+
         return out.compact()
         ### END YOUR SOLUTION
 
@@ -515,18 +515,17 @@ class Flip(TensorOp):
 
     def compute(self, a):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return a.flip(self.axes)
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return flip(out_grad, self.axes)
         ### END YOUR SOLUTION
 
 
 def flip(a, axes):
     return Flip(axes)(a)
-
 
 
 class Dilate(TensorOp):
@@ -547,6 +546,7 @@ class Dilate(TensorOp):
 
 def dilate(a, axes, dilation):
     return Dilate(axes, dilation)(a)
+
 
 class UnDilate(TensorOp):
     def __init__(self, axes: tuple, dilation: int):
@@ -586,6 +586,3 @@ class Conv(TensorOp):
 
 def conv(a, b, stride=1, padding=1):
     return Conv(stride, padding)(a, b)
-
-
-
