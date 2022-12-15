@@ -243,11 +243,12 @@ class MNISTDataset(Dataset):
 
 
 class CIFAR10Dataset(Dataset):
-    
+
     base_folder = "cifar-10-batches-py"
     url = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
     filename = "cifar-10-python.tar.gz"
-    train_list = ["data_batch_1", "data_batch_2", "data_batch_3", "data_batch_4", "data_batch_5"]
+    train_list = ["data_batch_1", "data_batch_2",
+                  "data_batch_3", "data_batch_4", "data_batch_5"]
     test_list = ["test_batch"]
 
     def __init__(
@@ -272,17 +273,17 @@ class CIFAR10Dataset(Dataset):
             downloaded_list = self.train_list
         else:
             downloaded_list = self.test_list
-        
+
         self.data = []
         self.targets = []
-        
+
         for file_name in downloaded_list:
             file_path = os.path.join(base_folder, file_name)
             with open(file_path, "rb") as f:
                 entry = pickle.load(f, encoding="latin1")
                 self.data.append(entry["data"])
                 self.targets.extend(entry["labels"])
-        
+
         self.data = np.vstack(self.data).reshape(-1, 3, 32, 32) / 255.
         self.targets = np.array(self.targets)
         ### END YOUR SOLUTION
@@ -317,10 +318,6 @@ class NDArrayDataset(Dataset):
         return tuple([a[i] for a in self.arrays])
 
 
-
-
-
-
 class Dictionary(object):
     """
     Creates a dictionary from a list of words, mapping each word to a
@@ -330,6 +327,7 @@ class Dictionary(object):
     idx2word: list of words in the dictionary, in the order they were added
         to the dictionary (i.e. each word only appears once in this list)
     """
+
     def __init__(self):
         self.word2idx = {}
         self.idx2word = []
@@ -342,7 +340,10 @@ class Dictionary(object):
         Returns the word's unique ID.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if word not in self.word2idx:
+            self.word2idx[word] = len(self.idx2word)
+            self.idx2word.append(word)
+        return self.word2idx[word]
         ### END YOUR SOLUTION
 
     def __len__(self):
@@ -350,19 +351,21 @@ class Dictionary(object):
         Returns the number of unique words in the dictionary.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return len(self.idx2word)
         ### END YOUR SOLUTION
-
 
 
 class Corpus(object):
     """
     Creates corpus from train, and test txt files.
     """
+
     def __init__(self, base_dir, max_lines=None):
         self.dictionary = Dictionary()
-        self.train = self.tokenize(os.path.join(base_dir, 'train.txt'), max_lines)
-        self.test = self.tokenize(os.path.join(base_dir, 'test.txt'), max_lines)
+        self.train = self.tokenize(os.path.join(
+            base_dir, 'train.txt'), max_lines)
+        self.test = self.tokenize(os.path.join(
+            base_dir, 'test.txt'), max_lines)
 
     def tokenize(self, path, max_lines=None):
         """
@@ -377,7 +380,16 @@ class Corpus(object):
         ids: List of ids
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        with open(path, "r") as f:
+            lines = f.readlines(max_lines)
+            f.close()
+        print(lines[0])
+        id_list = []
+        for line in lines:
+            words = line.strip().split(" ") + ["<eos>"]
+            for word in words:
+                id_list.append(self.dictionary.add_word(word))
+        return id_list
         ### END YOUR SOLUTION
 
 
@@ -398,7 +410,10 @@ def batchify(data, batch_size, device, dtype):
     Returns the data as a numpy array of shape (nbatch, batch_size).
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    nbatch = len(data) // batch_size
+    data = data[:(nbatch*batch_size)]
+    data_array = np.array(data, dtype=dtype).reshape(batch_size, nbatch).T
+    return data_array
     ### END YOUR SOLUTION
 
 
@@ -422,5 +437,8 @@ def get_batch(batches, i, bptt, device=None, dtype=None):
     target - Tensor of shape (bptt*bs,) with cached data as NDArray
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    chunk = batches[i:(i + bptt), :]
+    target = batches[(i + 1):(i + 1 + bptt), :].flatten()
+    return Tensor(chunk, device=device, dtype=dtype, requires_grad=False), \
+        Tensor(target, device=device, dtype=dtype, requires_grad=False)
     ### END YOUR SOLUTION
