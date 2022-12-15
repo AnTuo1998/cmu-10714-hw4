@@ -486,7 +486,7 @@ def one_iter_of_cifar10_training(dataloader, model, niter=1, loss_fn=ndl.nn.Soft
         if i >= niter:
             break
         i += 1
-    return correct/(y.shape[0]*niter), total_loss/(y.shape[0]*niter)
+    return correct/(y.shape[0]*niter), total_loss[0]/(y.shape[0]*niter)[0]
 
 
 ######################    |    ######################

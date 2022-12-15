@@ -246,6 +246,7 @@ class BroadcastTo(TensorOp):
         for idx, (in_dim, out_dim) in enumerate(zip(in_shape, out_shape)):
             if in_dim != out_dim:
                 sum_axes.append(idx)
+
         return reshape(summation(out_grad, axes=tuple(sum_axes)), shape=in_shape)
         ### END YOUR SOLUTION
 
@@ -292,7 +293,7 @@ def summation(a, axes=None):
 class MatMul(TensorOp):
     def compute(self, a, b):
         ### BEGIN YOUR SOLUTION
-        return array_api.matmul(a, b)
+        return a @ b
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
@@ -371,7 +372,7 @@ class ReLU(TensorOp):
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
         relu_grad = node.numpy() > 0
-        return out_grad * Tensor(relu_grad, dtype="float32")
+        return out_grad * Tensor(relu_grad, dtype="float32", device=out_grad.device)
         ### END YOUR SOLUTION
 
 
@@ -387,7 +388,8 @@ class LogSumExp(TensorOp):
         ### BEGIN YOUR SOLUTION
         max_z = array_api.max(Z, axis=self.axes, keepdims=True)
         max_z_bc = array_api.broadcast_to(max_z, Z.shape)
-        max_z = array_api.squeeze(max_z, axes=self.axes)
+        # max_z = array_api.squeeze(max_z, axes=self.axes)
+        max_z = array_api.max(Z, axis=self.axes)
         return array_api.log(array_api.exp(Z - max_z_bc).sum(self.axes)) + max_z
         ### END YOUR SOLUTION
 
@@ -612,7 +614,7 @@ class Conv(TensorOp):
         pad_axes = ((0, 0),
                     (self.padding, self.padding),
                     (self.padding, self.padding), (0, 0))
-        
+
         # need compact to make gradient work
         A = A.compact().pad(pad_axes)
         B = B.compact()

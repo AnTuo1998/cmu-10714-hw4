@@ -249,6 +249,8 @@ class NDArray:
         if prod(new_shape) != prod(self.shape):
             raise ValueError(
                 f"cannot reshape array of size {prod(self.shape)} into shape {new_shape}")
+        # must compact 
+        return self.compact().as_strided(new_shape, NDArray.compact_strides(new_shape))
         return NDArray.make(new_shape, device=self.device, handle=self._handle, offset=self._offset)
         ### END YOUR SOLUTION
 
@@ -283,7 +285,7 @@ class NDArray:
             new_strides[i] = strides[na]
         new_shape = tuple(new_shape)
         new_strides = tuple(new_strides)
-        return NDArray.make(new_shape, strides=new_strides, device=self.device, handle=self._handle, offset=self._offset)
+        return self.as_strided(new_shape, new_strides)
         ### END YOUR SOLUTION
 
     def broadcast_to(self, new_shape):
@@ -314,7 +316,7 @@ class NDArray:
                 for ns, s, stride in zip(new_shape, self.shape, self.strides)
             ]
         )
-        return NDArray.make(new_shape, strides=new_strides, device=self.device, handle=self._handle, offset=self._offset)
+        return self.as_strided(new_shape, new_strides)
         ### END YOUR SOLUTION
     
     def squeeze(self, axes: int = None):
@@ -617,31 +619,49 @@ class NDArray:
             view = self.compact().reshape((1,) * (self.ndim - 1) + (prod(self.shape),))
             out = NDArray.make((1,) * (self.ndim if keepdims else 1), device=self.device)
 
-
-        else:
-            if isinstance(axis, (tuple, list)):
-                assert len(axis) == 1, "Only support reduction over a single axis"
-                axis = axis[0]
-
+        elif isinstance(axis, int):
+            # if isinstance(axis, (tuple, list)):
+            #     assert len(axis) == 1, "Only support reduction over a single axis"
+            #     axis = axis[0]
             view = self.permute(
                 tuple([a for a in range(self.ndim) if a != axis]) + (axis,)
-            )
+            ).compact()
             out = NDArray.make(
                 tuple([1 if i == axis else s for i, s in enumerate(self.shape)])
                 if keepdims else
                 tuple([s for i, s in enumerate(self.shape) if i != axis]),
                 device=self.device,
             )
+        else:
+            last_dim = 1
+            view_shape = []
+            for a in range(self.ndim):
+                if a in axis:
+                    last_dim *= self.shape[a]
+                else:
+                    view_shape.append(self.shape[a])
+            view_shape.append(last_dim)
+
+            view = self.permute(
+                tuple([a for a in range(self.ndim) if a not in axis]) + axis
+            ).compact()
+            view = view.reshape(tuple(view_shape))
+            out = NDArray.make(
+                tuple([1 if i in axis else s for i, s in enumerate(self.shape)])
+                if keepdims else
+                tuple([s for i, s in enumerate(self.shape) if i not in axis]),
+                device=self.device,
+            )
         return view, out
 
     def sum(self, axis=None, keepdims=False):
         view, out = self.reduce_view_out(axis, keepdims=keepdims)
-        self.device.reduce_sum(view.compact()._handle, out._handle, view.shape[-1])
+        self.device.reduce_sum(view._handle, out._handle, view.shape[-1])
         return out
 
     def max(self, axis=None, keepdims=False):
         view, out = self.reduce_view_out(axis, keepdims=keepdims)
-        self.device.reduce_max(view.compact()._handle, out._handle, view.shape[-1])
+        self.device.reduce_max(view._handle, out._handle, view.shape[-1])
         return out
 
 

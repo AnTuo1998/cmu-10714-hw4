@@ -156,7 +156,10 @@ class SoftmaxLoss(Module):
         batch = logits.shape[0]
         axes = tuple(list(range(1, len(logits.shape))))
         loss = ops.logsumexp(logits, axes=axes) - \
-            ops.summation(logits * init.one_hot(n, y), axes=axes)
+            ops.summation(logits * init.one_hot(n, y,
+                                                device=logits.device, 
+                                                dtype=logits.dtype), 
+                          axes=axes)
         return loss.sum() / batch
         ### END YOUR SOLUTION
 
@@ -296,33 +299,39 @@ class Conv(Module):
             shape=(kernel_size, kernel_size, in_channels, out_channels),
             device=device, dtype=dtype, requires_grad=True
         ))
-        bound = math.sqrt((kernel_size ** 2) * in_channels)
+        bound = 1 / math.sqrt((kernel_size ** 2) * in_channels)
         self.bias = Parameter(init.rand(
-            1, out_channels, low=-bound, high=bound,
+            out_channels, low=-bound, high=bound,
             device=device, dtype=dtype, requires_grad=True
-        ).transpose()) if bias else None
+        )) if bias else None
+
         ### END YOUR SOLUTION
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        # N, C, H, W = x.shape 
-        
+        # N, C, H, W = x.shape
+
         # N, H, W, C
-        x = ops.transpose(ops.transpose(x, axes=(1,2), axes=(2,3)))
-        
+        x = ops.transpose(ops.transpose(x, axes=(1, 2)), axes=(2, 3))
+
         # N, H_o, W_o, C_o
         out = ops.conv(x, self.weight, stride=self.stride,
-                       padding=(self.kernel_size - 1)//2) 
-        
-        # N, C_o, H_o, W_o
-        out = ops.transpose(ops.transpose(out, axes=(2,3), axes=(1,2)))
-        
-        
+                       padding=(self.kernel_size)//2)
+
         if self.bias:
             out += self.bias.reshape(
-                (1, self.out_channels, 1, 1)
-                ).broadcast_to(out.shape)
-        
+                (1, 1, 1, self.out_channels)
+            ).broadcast_to(out.shape)
+
+        # # N, C_o, H_o, W_o
+        out = ops.transpose(ops.transpose(out, axes=(2, 3)), axes=(1, 2))
+
+        # Question: if transpose before adding bias, Resnet9 is wrong, why
+        # if self.bias:
+        #     out += self.bias.reshape(
+        #         (1, self.out_channels, 1, 1)
+        #         ).broadcast_to(out.shape)
+
         return out
         ### END YOUR SOLUTION
 
