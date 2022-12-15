@@ -122,7 +122,7 @@ class ReLU(Module):
 class Tanh(Module):
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return ops.tanh(x)
         ### END YOUR SOLUTION
 
 
@@ -157,9 +157,7 @@ class SoftmaxLoss(Module):
         axes = tuple(list(range(1, len(logits.shape))))
         loss = ops.logsumexp(logits, axes=axes) - \
             ops.summation(logits * init.one_hot(n, y,
-                                                device=logits.device, 
-                                                dtype=logits.dtype), 
-                          axes=axes)
+                                                device=logits.device, dtype=logits.dtype), axes=axes)
         return loss.sum() / batch
         ### END YOUR SOLUTION
 
@@ -357,7 +355,28 @@ class RNNCell(Module):
         """
         super().__init__()
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+
+        self.activation = Tanh() if nonlinearity == 'tanh' else ReLU()
+        self.bias = bias
+        k = 1. / math.sqrt(hidden_size)
+        self.W_ih = Parameter(init.rand(
+            input_size, hidden_size, low=-k, high=k,
+            device=device, dtype=dtype, requires_grad=True
+        ))
+        self.W_hh = Parameter(init.rand(
+            hidden_size, hidden_size, low=-k, high=k,
+            device=device, dtype=dtype, requires_grad=True
+        ))
+        self.bias_ih = Parameter(init.rand(
+            hidden_size, low=-k, high=k,
+            device=device, dtype=dtype, requires_grad=True
+        )) if bias else None
+        self.bias_hh = Parameter(init.rand(
+            hidden_size, low=-k, high=k,
+            device=device, dtype=dtype, requires_grad=True
+        )) if bias else None
         ### END YOUR SOLUTION
 
     def forward(self, X, h=None):
@@ -371,9 +390,23 @@ class RNNCell(Module):
         h' of shape (bs, hidden_size): Tensor contianing the next hidden state
             for each element in the batch.
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        ## BEGIN YOUR SOLUTION
+        bs = X.shape[0]
+        if h is None:
+            h = init.zeros(bs, self.hidden_size,
+                           dtype=X.dtype, device=X.device)
+
+        Z = X @ self.W_ih + h @ self.W_hh
+        # bs, hidden_size
+
+        if self.bias_ih:
+            Z += self.bias_ih.reshape((1, self.hidden_size)).broadcast_to((bs, self.hidden_size)) + \
+                self.bias_hh.reshape((1, self.hidden_size)).broadcast_to(
+                    (bs, self.hidden_size))
+
+        h_n = self.activation(Z)
+        return h_n
+        ## END YOUR SOLUTION
 
 
 class RNN(Module):
@@ -401,7 +434,19 @@ class RNN(Module):
         """
         super().__init__()
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        self.rnn_cells = [
+            RNNCell(input_size, hidden_size, bias=bias,
+                    nonlinearity=nonlinearity, device=device, dtype=dtype)
+        ]
+        for _ in range(num_layers - 1):
+            self.rnn_cells.append(
+                RNNCell(hidden_size, hidden_size, bias=bias,
+                        nonlinearity=nonlinearity, device=device, dtype=dtype)
+            )
         ### END YOUR SOLUTION
 
     def forward(self, X, h0=None):
@@ -417,7 +462,24 @@ class RNN(Module):
         h_n of shape (num_layers, bs, hidden_size) containing the final hidden state for each element in the batch.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        seq_len, bs, _ = X.shape
+        X_list = ops.split(X, axis=0)
+
+        out_list = []
+        if h0:
+            h_list = list(ops.split(h0, axis=0))
+        else:
+            h_list = [None] * self.num_layers
+
+        for t in range(seq_len):
+            X_in = X_list[t]
+            for i, rnn_cell in enumerate(self.rnn_cells):
+                h = rnn_cell(X_in, h_list[i])
+                X_in = h
+                h_list[i] = h
+            out_list.append(X_in)
+
+        return ops.stack(out_list, axis=0), ops.stack(h_list, axis=0)
         ### END YOUR SOLUTION
 
 

@@ -246,8 +246,7 @@ class BroadcastTo(TensorOp):
         for idx, (in_dim, out_dim) in enumerate(zip(in_shape, out_shape)):
             if in_dim != out_dim:
                 sum_axes.append(idx)
-
-        return reshape(summation(out_grad, axes=tuple(sum_axes)), shape=in_shape)
+        return reshape(summation(out_grad, axes=tuple(sum_axes)), shape=tuple(in_shape))
         ### END YOUR SOLUTION
 
 
@@ -263,8 +262,22 @@ class Summation(TensorOp):
         ### BEGIN YOUR SOLUTION
         # print("sum", a.shape, self.axes)
         # print("sum", array_api.sum(a, axis=self.axes).shape)
+        # special case sum(axes=()) for no sum
+        if isinstance(self.axes, tuple) and not self.axes:
+            return a
         return a.sum(axis=self.axes)
         ### END YOUR SOLUTION
+        # if self.axes is None:
+        #     return a.sum()
+        # else:
+        #     # NOTE self.axes maybe int
+        #     if isinstance(self.axes, int):
+        #         return a.sum(self.axes)
+        #     # NOTE only support sum in a single dim
+        #     for i, axis in enumerate(sorted(list(self.axes))):
+        #         # NOTE -i because each sum() operation will reduce the dimension number
+        #         a = a.sum(axis-i)
+        #     return a
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
@@ -386,10 +399,10 @@ class LogSumExp(TensorOp):
 
     def compute(self, Z):
         ### BEGIN YOUR SOLUTION
-        max_z = array_api.max(Z, axis=self.axes, keepdims=True)
+        max_z = Z.max(axis=self.axes, keepdims=True)
         max_z_bc = array_api.broadcast_to(max_z, Z.shape)
         # max_z = array_api.squeeze(max_z, axes=self.axes)
-        max_z = array_api.max(Z, axis=self.axes)
+        max_z = Z.max(axis=self.axes)
         return array_api.log(array_api.exp(Z - max_z_bc).sum(self.axes)) + max_z
         ### END YOUR SOLUTION
 
