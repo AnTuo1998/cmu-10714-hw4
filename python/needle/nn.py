@@ -132,7 +132,7 @@ class Sigmoid(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return 1 / (1 + ops.exp(-x))
         ### END YOUR SOLUTION
 
 
@@ -503,7 +503,27 @@ class LSTMCell(Module):
         """
         super().__init__()
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+
+        self.bias = bias
+        k = 1. / math.sqrt(hidden_size)
+        self.W_ih = Parameter(init.rand(
+            input_size, 4 * hidden_size, low=-k, high=k,
+            device=device, dtype=dtype, requires_grad=True
+        ))
+        self.W_hh = Parameter(init.rand(
+            hidden_size, 4 * hidden_size, low=-k, high=k,
+            device=device, dtype=dtype, requires_grad=True
+        ))
+        self.bias_ih = Parameter(init.rand(
+            4 * hidden_size, low=-k, high=k,
+            device=device, dtype=dtype, requires_grad=True
+        )) if bias else None
+        self.bias_hh = Parameter(init.rand(
+            4 * hidden_size, low=-k, high=k,
+            device=device, dtype=dtype, requires_grad=True
+        )) if bias else None
         ### END YOUR SOLUTION
 
     def forward(self, X, h=None):
@@ -523,7 +543,32 @@ class LSTMCell(Module):
             element in the batch.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        bs = X.shape[0]
+        if h is None:
+            h0 = init.zeros(bs, self.hidden_size,
+                            dtype=X.dtype, device=X.device)
+            c0 = init.zeros(bs, self.hidden_size,
+                            dtype=X.dtype, device=X.device)
+        else:
+            h0, c0 = h
+
+        Z = X @ self.W_ih + h0 @ self.W_hh
+        # bs, hidden_size
+
+        if self.bias_ih:
+            Z += self.bias_ih.reshape((1, 4*self.hidden_size)).broadcast_to((bs, 4*self.hidden_size)) + \
+                self.bias_hh.reshape((1, 4*self.hidden_size)).broadcast_to(
+                    (bs, 4*self.hidden_size))
+
+        Z_split = ops.split(Z, axis=1)
+        i = Sigmoid()(ops.stack(Z_split[:self.hidden_size], axis=1))
+        f = Sigmoid()(ops.stack(Z_split[self.hidden_size: 2*self.hidden_size], axis=1))
+        g = Tanh()(ops.stack(Z_split[2*self.hidden_size:3*self.hidden_size], axis=1))
+        o = Sigmoid()(ops.stack(Z_split[3*self.hidden_size:], axis=1))
+
+        c = f * c + i * g
+        h = o * Tanh()(c)
+        return h, c
         ### END YOUR SOLUTION
 
 
