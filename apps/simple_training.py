@@ -4,6 +4,7 @@ import needle as ndl
 import needle.nn as nn
 from needle import backend_ndarray as nd
 from models import *
+import numpy as np
 import time
 
 device = ndl.cpu()
@@ -99,9 +100,40 @@ def epoch_general_ptb(data, model, seq_len=40, loss_fn=nn.SoftmaxLoss(), opt=Non
         avg_loss: average loss over dataset
     """
     np.random.seed(4)
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    ## BEGIN YOUR SOLUTION
+    total_loss = 0.
+    n_samples = 0
+    n_batch = 0
+    acc = 0
+    print("data")
+    print(data.shape)
+    if opt:
+        model.train()
+    else:
+        model.eval()
+    
+    for i in range(0, len(data)-1, seq_len):
+        X, y = ndl.data.get_batch(data, i, seq_len, 
+                                  device=device, dtype=dtype)
+        print("y")
+        print(y)
+        y_pred = model(X)
+        loss = loss_fn(y_pred, y)
+        
+        if opt:
+            opt.reset_grad()
+            loss.backward()
+            if clip:
+                pass
+            opt.step()
+        # print(y.shape)
+        total_loss += loss
+        n_samples += y.shape[0]
+        n_batch += 1
+        acc += np.equal(y_pred.numpy().argmax(axis=1), y.numpy()).sum()
+    
+    return acc / n_samples, total_loss / n_batch    
+    ## END YOUR SOLUTION        
 
 
 def train_ptb(model, data, seq_len=40, n_epochs=1, optimizer=ndl.optim.SGD,
@@ -127,7 +159,14 @@ def train_ptb(model, data, seq_len=40, n_epochs=1, optimizer=ndl.optim.SGD,
     """
     np.random.seed(4)
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    opt = optimizer(model.parameters(), lr=lr, weight_decay=weight_decay)
+    loss_func = loss_fn()
+    for ep in range(n_epochs):
+        avg_acc, avg_loss = epoch_general_ptb(data, model, seq_len,
+                                              loss_func, opt, clip, 
+                                              device, dtype)
+        
+    return avg_acc, avg_loss
     ### END YOUR SOLUTION
 
 
@@ -148,7 +187,11 @@ def evaluate_ptb(model, data, seq_len=40, loss_fn=nn.SoftmaxLoss,
     """
     np.random.seed(4)
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    avg_acc, avg_loss = epoch_general_ptb(data, model, seq_len,
+                                          loss_fn(), None, None,
+                                            device, dtype)
+
+    return avg_acc, avg_loss
     ### END YOUR SOLUTION
 
 

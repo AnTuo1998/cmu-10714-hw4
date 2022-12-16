@@ -381,9 +381,8 @@ class Corpus(object):
         """
         ### BEGIN YOUR SOLUTION
         with open(path, "r") as f:
-            lines = f.readlines(max_lines)
+            lines = f.readlines()[:max_lines]
             f.close()
-        print(lines[0])
         id_list = []
         for line in lines:
             words = line.strip().split(" ") + ["<eos>"]
@@ -437,6 +436,7 @@ def get_batch(batches, i, bptt, device=None, dtype=None):
     target - Tensor of shape (bptt*bs,) with cached data as NDArray
     """
     ### BEGIN YOUR SOLUTION
+    bptt = min(bptt, len(batches)-1-i)
     chunk = batches[i:(i + bptt), :]
     target = batches[(i + 1):(i + 1 + bptt), :].flatten()
     return Tensor(chunk, device=device, dtype=dtype, requires_grad=False), \
